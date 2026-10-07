@@ -85,14 +85,17 @@ describe("planCraft", () => {
       },
     });
     expect(plan.steps.map((step) => step.title)).toEqual([
-      "Glyph of Despair: seal Increased Physical Damage",
-      "Glyph of Hope: add Critical Strike Multiplier at tier 1",
       "Glyph of Hope: add any suffix at tier 1",
       "Rune of Havoc, with Glyph of Hope",
+      "Glyph of Despair: seal Increased Physical Damage",
+      "Glyph of Hope: add Critical Strike Multiplier at tier 1",
+      "Glyph of Hope: upgrade Critical Strike Multiplier to tier 2",
+      "Glyph of Hope: upgrade Critical Strike Multiplier to tier 3",
+      "Glyph of Hope: upgrade Critical Strike Multiplier to tier 4",
       "Glyph of Hope: upgrade Critical Strike Multiplier to tier 5",
     ]);
-    expect(plan.steps[2].detail).toMatch(/any suffix this item can roll/);
-    expect(plan.steps[0].odds).toMatch(/3 affix/);
+    expect(plan.steps[0].detail).toMatch(/any suffix this item can roll/);
+    expect(plan.steps[2].odds).toMatch(/4 affix/);
     expect(plan.clears.map((option) => option.tool)).toEqual(["Seal", "Removal", "Chaos"]);
     expect(plan.clears[0].chance).toBeGreaterThan(plan.clears[1].chance);
     expect(plan.clears[1].chance).toBeGreaterThan(plan.clears[2].chance);
@@ -190,5 +193,37 @@ describe("planCraft", () => {
       },
     });
     expect(plan.verdict).toBe("impossible");
+  });
+
+  it("upgrades health regen with Hope when the exalted tier is already on dexterity", () => {
+    const plan = planCraft({
+      ...base,
+      itemClass: "mage",
+      iterations: 800,
+      state: {
+        fp: 35,
+        affixes: [
+          { id: "dexterity", tier: 7, sealed: false },
+          { id: "mage-chance-to-cast-fire-aura-on-crit", tier: 5, sealed: false },
+          { id: "health-regen", tier: 1, sealed: false },
+          { id: "void-res", tier: 2, sealed: false },
+        ],
+      },
+      goal: {
+        exact: false,
+        minFp: 0,
+        affixes: [
+          { id: "dexterity", minTier: 7, sealed: false },
+          { id: "health-regen", minTier: 5, sealed: false },
+        ],
+      },
+    });
+    expect(plan.steps.map((step) => step.title)).toEqual([
+      "Glyph of Hope: upgrade Health Regen per Second to tier 2",
+      "Glyph of Hope: upgrade Health Regen per Second to tier 3",
+      "Glyph of Hope: upgrade Health Regen per Second to tier 4",
+      "Glyph of Hope: upgrade Health Regen per Second to tier 5",
+    ]);
+    expect(plan.successChance).toBeGreaterThan(0.5);
   });
 });

@@ -487,7 +487,7 @@ export function chooseAction(state: ItemState, ctx: Ctx): Action | null {
     }
   }
 
-  if (!delayHavoc(state, ctx)) {
+  if (!delayHavoc(state, ctx) && moveExalted) {
     const odds = havocOdds(state, ctx.goal);
     if (odds && odds.fraction > 0) return { type: "havoc" };
   }
