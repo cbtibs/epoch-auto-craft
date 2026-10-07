@@ -1,3 +1,4 @@
+import { printedName } from "./affixes";
 import type { AffixDef, AffixGroup, FpType, ItemClass, SlotId } from "./types";
 
 export type ImportAffix = {
@@ -58,11 +59,15 @@ export function parseTooltip(text: string, catalog: AffixDef[], fallbackSlot: Sl
   const headerLines = (fpIndex >= 0 ? lines.slice(0, fpIndex) : lines.slice(0, 12)).filter((line) => !/\+\s*\d/.test(line));
   const headerText = headerLines.join("\n");
   const slot = detectSlot(headerText);
-  const itemClass = detectClass(headerLines);
+  const detectedClass = detectClass(lines);
   const usedSlot = slot ?? fallbackSlot;
-  const usedClass = itemClass ?? fallbackClass;
   const affixLines = fpIndex >= 0 ? lines.slice(fpIndex + 1) : lines;
-  const affixes = readAffixes(affixLines, catalog, usedSlot, usedClass);
+  const openRead = readAffixes(affixLines, catalog, usedSlot, detectedClass ?? "none");
+  const itemClass = detectedClass ?? classFromAffixes(openRead, catalog);
+  const usedClass = itemClass ?? fallbackClass;
+  const affixes = usedClass === (detectedClass ?? "none")
+    ? openRead
+    : readAffixes(affixLines, catalog, usedSlot, usedClass);
 
   return {
     fp: detectFp(rawText),
@@ -88,10 +93,19 @@ function detectSlot(headerText: string): SlotId | null {
   return null;
 }
 
-function detectClass(headerLines: string[]): ItemClass | null {
-  const line = headerLines.find((entry) => /requires/i.test(entry));
+function detectClass(lines: string[]): ItemClass | null {
+  const line = lines.find((entry) => /requires/i.test(entry));
   const match = line?.match(/\b(sentinel|mage|primalist|acolyte|rogue)\b/i);
   return match ? match[1].toLowerCase() as ItemClass : null;
+}
+
+function classFromAffixes(rows: ImportAffix[], catalog: AffixDef[]): ItemClass | null {
+  const found = new Set<ItemClass>();
+  for (const row of rows) {
+    const spec = catalog.find((affix) => affix.id === row.id)?.class;
+    if (spec) found.add(spec);
+  }
+  return found.size === 1 ? [...found][0] : null;
 }
 
 function readAffixes(lines: string[], catalog: AffixDef[], slot: SlotId, itemClass: ItemClass): ImportAffix[] {
@@ -219,7 +233,7 @@ function matchAffix(line: string, catalog: AffixDef[], slot: SlotId, itemClass: 
   for (const def of catalog) {
     if (!def.slots.includes(slot)) continue;
     if (def.class && itemClass !== "none" && def.class !== itemClass) continue;
-    const nameTokens = tokens(def.name);
+    const nameTokens = tokens(printedName(def));
     if (!nameTokens.length || !nameTokens.every((token) => lineTokens.has(token))) continue;
     const namePhrase = nameTokens.join(" ");
     const score = nameTokens.length * 1000 + (linePhrase.includes(namePhrase) ? 500 : 0) + namePhrase.length;

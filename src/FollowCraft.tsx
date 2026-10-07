@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { affixName, customAffixId } from "./affixes";
+import { affixChoices, affixName, customAffixId, printedName } from "./affixes";
 import { otherAffixes, resolveCraft, type CraftInput } from "./observe";
 import type { Action, AffixDef, AffixState, ItemClass, ItemState, PlanStep, SlotId } from "./types";
 
@@ -71,12 +71,7 @@ export function FollowCraft({
     ? { ...preview, ok: false, state: null, note: "", reason: "Type the name of the affix Chaos turned it into." }
     : preview;
   const showCrit = action && (action.type === "add" || action.type === "upgrade" || action.type === "chaos" || action.type === "seal");
-  const adds = catalog.filter((affix) => {
-    if (affixes.some((item) => item.id === affix.id)) return false;
-    if (!affix.slots.includes(slot)) return false;
-    if (affix.class && affix.class !== itemClass) return false;
-    return affix.name.toLowerCase().includes(addQuery.trim().toLowerCase());
-  }).slice(0, 8);
+  const adds = affixChoices(catalog, slot, itemClass, addQuery, new Set(affixes.map((affix) => affix.id)));
 
   function chooseChaos(id: string) {
     setChaosId(id);
@@ -128,9 +123,9 @@ export function FollowCraft({
             <div className="menu">
               {adds.length === 0 && <p>No matching affix.</p>}
               {adds.map((affix) => (
-                <button key={affix.id} type="button" onClick={() => { setAddId(affix.id); setAddQuery(affix.name); }}>
-                  <span>{affix.group}</span>
-                  {affix.name}
+                <button key={affix.id} type="button" onClick={() => { setAddId(affix.id); setAddQuery(printedName(affix)); }}>
+                  <span>{affix.class ? `${affix.group} · ${affix.class}` : affix.group}</span>
+                  {printedName(affix)}
                 </button>
               ))}
             </div>
@@ -179,7 +174,7 @@ export function FollowCraft({
               <option value="">Choose the result</option>
               {chaosOptions.map((affix) => (
                 <option key={affix.id} value={affix.id}>
-                  {affix.name}{goalIds.includes(affix.id) ? " · on your target" : ""}
+                  {printedName(affix)}{goalIds.includes(affix.id) ? " · on your target" : ""}
                 </option>
               ))}
               <option value="__custom__">An affix that is not listed</option>
@@ -229,7 +224,7 @@ export function FollowCraft({
               <select value={redemption[affix.id] ?? ""} onChange={(event) => setRedemption((current) => ({ ...current, [affix.id]: event.target.value }))}>
                 <option value="">Choose</option>
                 {redemptionChoices(catalog, slot, itemClass, affixes, affix.id, redemption).map((option) => (
-                  <option key={option.id} value={option.id}>{option.name}</option>
+                  <option key={option.id} value={option.id}>{printedName(option)}</option>
                 ))}
               </select>
             </label>

@@ -105,6 +105,43 @@ Cannot be Traded
     ]);
   });
 
+  it("reads increased melee elemental damage on a mage helm", () => {
+    const read = parseTooltip(`
+MAGE'S MYSTIC HELM OF HOPE
+MAGE HELMET
++184 ARMOR
+Range: 184 to 184
++39% CRITICAL STRIKE AVOIDANCE
+Range: 20% to 40%
+42 FORGING POTENTIAL
+PREFIXES
+37% INCREASED MELEE ELEMENTAL DAMAGE
+Tier: 2
+Range: 34% to 37%
++16 VITALITY
+Tier: 7 (drop only)
+Range: 14 to 16
+SUFFIXES
++27% POISON RESISTANCE
+Tier: 4
+Range: 22% to 29%
++56% VOID RESISTANCE
+Tier: 6 (drop only)
+Range: 50% to 60%
+Requires: Level 66 Mage
+Cannot be Traded
+`, AFFIXES, "ring", "none");
+    expect(read.fp).toBe(42);
+    expect(read.slot).toBe("helmet");
+    expect(read.itemClass).toBe("mage");
+    expect(read.affixes.map((affix) => [affix.id, affix.tier])).toEqual([
+      ["mage-increased-melee-elemental-damage", 2],
+      ["vitality", 7],
+      ["poison-res", 4],
+      ["void-res", 6],
+    ]);
+  });
+
   it("does not treat the rolled number as the tier", () => {
     expect(tierInLine("+7 Strength")).toBeNull();
     expect(tierInLine("Tier 7")).toBe(7);

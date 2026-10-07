@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { AFFIXES, affixName, customAffixId } from "./affixes";
+import { AFFIXES, affixChoices, affixName, customAffixId, printedName } from "./affixes";
 import { FollowCraft } from "./FollowCraft";
 import { readTooltipImage } from "./ocr";
 import { formatChance, planCraft } from "./solver";
@@ -372,6 +372,10 @@ export function App() {
               setHistory([]);
             }}
             onCustom={(affix) => setCustoms((list) => [...list, affix])}
+            onUseClass={(next) => {
+              setItemClass(next);
+              setResult(null);
+            }}
           />
           {importDraft && (
             <TooltipReview
@@ -413,6 +417,10 @@ export function App() {
           }}
           canCopyCurrent={current.length > 0}
           onCustom={(affix) => setCustoms((list) => [...list, affix])}
+          onUseClass={(next) => {
+            setItemClass(next);
+            setResult(null);
+          }}
         />
       </div>
 
@@ -589,6 +597,7 @@ type BoardProps = {
   slot: SlotId;
   itemClass: ItemClass;
   onCustom: (affix: AffixDef) => void;
+  onUseClass: (next: ItemClass) => void;
 } & (
   | {
       mode: "current";
@@ -621,12 +630,7 @@ function ItemBoard(props: BoardProps) {
   const [dragOver, setDragOver] = useState(false);
   const [tooltipText, setTooltipText] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
-  const choices = props.catalog.filter((affix) => {
-    if (taken.has(affix.id)) return false;
-    if (!affix.slots.includes(props.slot)) return false;
-    if (affix.class && affix.class !== props.itemClass) return false;
-    return affix.name.toLowerCase().includes(query.trim().toLowerCase());
-  }).slice(0, 8);
+  const choices = affixChoices(props.catalog, props.slot, props.itemClass, query, taken);
 
   function addAny() {
     if (props.mode !== "target") return;
@@ -637,6 +641,8 @@ function ItemBoard(props: BoardProps) {
   }
 
   function add(id: string) {
+    const def = props.catalog.find((affix) => affix.id === id);
+    if (def?.class && props.itemClass === "none") props.onUseClass(def.class);
     if (props.mode === "current") props.onChange([...props.affixes, { id, tier: 1, sealed: false }]);
     else props.onChange([...props.affixes, { id, minTier: 5, sealed: false }]);
     setQuery("");
@@ -809,8 +815,8 @@ function ItemBoard(props: BoardProps) {
             {choices.length === 0 && <p>No matching affix. Add it as a custom one below.</p>}
             {choices.map((affix) => (
               <button key={affix.id} type="button" onClick={() => add(affix.id)}>
-                <span>{affix.group}</span>
-                {affix.name}
+                <span>{affix.class ? `${affix.group} · ${affix.class}` : affix.group}</span>
+                {printedName(affix)}
               </button>
             ))}
           </div>

@@ -1,4 +1,4 @@
-import { affixName } from "./affixes";
+import { affixName, printedName } from "./affixes";
 import type { Action, AffixDef, AffixGroup, AffixState, ItemClass, ItemState, SlotId } from "./types";
 
 export type CraftInput = {
@@ -90,8 +90,14 @@ function applyMain(
 function applyAdd(state: ItemState, id: string, catalog: AffixDef[], slot: SlotId, itemClass: ItemClass): { ok: true } | { ok: false; reason: string } {
   const def = catalog.find((affix) => affix.id === id);
   if (!def) return { ok: false, reason: "Choose the affix that was added." };
-  if (state.affixes.some((affix) => affix.id === id)) return { ok: false, reason: `${def.name} is already on the item.` };
-  if (!allowed(def, slot, itemClass)) return { ok: false, reason: `${def.name} cannot be added to this item.` };
+  if (state.affixes.some((affix) => affix.id === id)) return { ok: false, reason: `${printedName(def)} is already on the item.` };
+  if (!allowed(def, slot, itemClass)) {
+    if (def.class && def.slots.includes(slot) && itemClass !== def.class) {
+      const who = def.class.charAt(0).toUpperCase() + def.class.slice(1);
+      return { ok: false, reason: `${printedName(def)} only rolls on ${who} items.` };
+    }
+    return { ok: false, reason: `${printedName(def)} cannot be added to this item.` };
+  }
   if (openSlots(state, def.group, catalog) <= 0) {
     return { ok: false, reason: `The ${def.group} side is full. Seal or remove an affix first.` };
   }

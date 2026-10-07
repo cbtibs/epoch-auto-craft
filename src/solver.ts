@@ -1,4 +1,4 @@
-import { affixName } from "./affixes";
+import { affixName, printedName } from "./affixes";
 import { expectedRoll, freeCraftChance, rollForgingPotential, sealChance, upgradeCost } from "./rules";
 import type {
   Action,
@@ -127,6 +127,14 @@ function allowed(def: AffixDef, slot: SlotId, itemClass: ItemClass): boolean {
   if (!def.slots.includes(slot)) return false;
   if (def.class && itemClass !== def.class) return false;
   return true;
+}
+
+function rollBlocker(def: AffixDef, slot: SlotId, itemClass: ItemClass): string {
+  if (def.class && def.slots.includes(slot) && itemClass !== def.class) {
+    const who = def.class.charAt(0).toUpperCase() + def.class.slice(1);
+    return `${printedName(def)} only rolls on ${who} items.`;
+  }
+  return `${printedName(def)} cannot roll on this item.`;
 }
 
 function isExalted(state: ItemState): boolean {
@@ -931,7 +939,7 @@ export function diagnose(state: ItemState, goal: Goal, catalog: AffixDef[], slot
   for (const affix of state.affixes) {
     const def = resolveDef(catalog, affix.id);
     if (!def) blockers.push(`${affix.id} is not in the affix list.`);
-    else if (!allowed(def, slot, itemClass)) blockers.push(`${def.name} cannot roll on this item.`);
+    else if (!allowed(def, slot, itemClass)) blockers.push(rollBlocker(def, slot, itemClass));
     if (affix.tier < 1 || affix.tier > 7) blockers.push(`${name(affix.id)} is tier ${affix.tier}. This planner covers tiers 1 through 7.`);
     if (affix.sealed && affix.tier > 4) blockers.push(`${name(affix.id)} is sealed above tier 4. Despair cannot create that.`);
   }
@@ -943,12 +951,12 @@ export function diagnose(state: ItemState, goal: Goal, catalog: AffixDef[], slot
       blockers.push(`${wanted.id} is not in the affix list.`);
       continue;
     }
-    if (!allowed(def, slot, itemClass)) blockers.push(`${def.name} cannot roll on this item.`);
-    if (wanted.minTier < 1 || wanted.minTier > 7) blockers.push(`${def.name} has a target tier outside 1–7.`);
+    if (!allowed(def, slot, itemClass)) blockers.push(rollBlocker(def, slot, itemClass));
+    if (wanted.minTier < 1 || wanted.minTier > 7) blockers.push(`${printedName(def)} has a target tier outside 1–7.`);
     if (wanted.sealed && (wanted.minTier < 1 || wanted.minTier > 4)) {
-      blockers.push(`${def.name} cannot be sealed at tier ${wanted.minTier}. Despair seals the current tier, and only tiers 1–4 can be sealed.`);
+      blockers.push(`${printedName(def)} cannot be sealed at tier ${wanted.minTier}. Despair seals the current tier, and only tiers 1–4 can be sealed.`);
     }
-    if (wanted.minTier > 5 && wanted.sealed) blockers.push(`${def.name} cannot be both exalted and sealed. Sealing stops at tier 4.`);
+    if (wanted.minTier > 5 && wanted.sealed) blockers.push(`${printedName(def)} cannot be both exalted and sealed. Sealing stops at tier 4.`);
   }
 
   for (const group of ["prefix", "suffix"] as const) {
