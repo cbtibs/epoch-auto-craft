@@ -130,6 +130,15 @@ function allowed(def: AffixDef, slot: SlotId, itemClass: ItemClass): boolean {
 }
 
 function rollBlocker(def: AffixDef, slot: SlotId, itemClass: ItemClass): string {
+  if (def.group === "set") {
+    const where = def.class && def.slots.includes(slot) && itemClass !== def.class
+      ? `${def.class.charAt(0).toUpperCase()}${def.class.slice(1)} ${def.itemType ?? "item"}`
+      : (def.itemType ?? "this item");
+    if (def.class && def.slots.includes(slot) && itemClass !== def.class) {
+      return `${printedName(def)} is a set shard. It only goes on a ${where}.`;
+    }
+    return `${printedName(def)} only goes on a ${where}.`;
+  }
   if (def.class && def.slots.includes(slot) && itemClass !== def.class) {
     const who = def.class.charAt(0).toUpperCase() + def.class.slice(1);
     return `${printedName(def)} only rolls on ${who} items.`;
@@ -191,6 +200,7 @@ function chaosOptions(state: ItemState, id: string, ctx: Ctx): AffixDef[] {
   return ctx.catalog.filter(
     (affix) =>
       affix.group === self.group &&
+      affix.group !== "set" &&
       affix.id !== id &&
       !present.has(affix.id) &&
       allowed(affix, ctx.slot, ctx.itemClass),
@@ -941,7 +951,6 @@ export function diagnose(state: ItemState, goal: Goal, catalog: AffixDef[], slot
     if (!def) blockers.push(`${affix.id} is not in the affix list.`);
     else if (!allowed(def, slot, itemClass)) blockers.push(rollBlocker(def, slot, itemClass));
     if (affix.tier < 1 || affix.tier > 7) blockers.push(`${name(affix.id)} is tier ${affix.tier}. This planner covers tiers 1 through 7.`);
-    if (affix.sealed && affix.tier > 4) blockers.push(`${name(affix.id)} is sealed above tier 4. Despair cannot create that.`);
   }
 
   const sealedNow = state.affixes.find((affix) => affix.sealed);
@@ -953,10 +962,12 @@ export function diagnose(state: ItemState, goal: Goal, catalog: AffixDef[], slot
     }
     if (!allowed(def, slot, itemClass)) blockers.push(rollBlocker(def, slot, itemClass));
     if (wanted.minTier < 1 || wanted.minTier > 7) blockers.push(`${printedName(def)} has a target tier outside 1–7.`);
-    if (wanted.sealed && (wanted.minTier < 1 || wanted.minTier > 4)) {
-      blockers.push(`${printedName(def)} cannot be sealed at tier ${wanted.minTier}. Despair seals the current tier, and only tiers 1–4 can be sealed.`);
+    if (wanted.sealed && wanted.minTier > 4) {
+      const already = state.affixes.find((affix) => affix.id === wanted.id && affix.sealed && affix.tier >= wanted.minTier);
+      if (!already) {
+        blockers.push(`${printedName(def)} cannot be sealed at tier ${wanted.minTier}. Glyph of Despair only seals tiers 1–4. A higher seal has to already be on the item, from a drop or a lucky Blood Rage craft.`);
+      }
     }
-    if (wanted.minTier > 5 && wanted.sealed) blockers.push(`${printedName(def)} cannot be both exalted and sealed. Sealing stops at tier 4.`);
   }
 
   for (const group of ["prefix", "suffix"] as const) {
@@ -1036,7 +1047,6 @@ export function planCraft(input: SolverInput): PlanResult {
     critChance: Math.min(1, input.rules.critChance + (input.fpType === "blood" ? input.rules.bloodCritBonus : 0)),
     icePreserveChance: input.fpType === "ice" ? input.rules.icePreserveChance : 0,
   };
-  const blockers = diagnose(input.state, input.goal, input.catalog, input.slot, input.itemClass);
   const notes = plannerNotes(input.fpType, rules);
   if (anyLines > 0) {
     notes.unshift(`${anyLines === 1 ? "One line is" : `${anyLines} lines are`} Any affix. Those can stay as they are, and Forging Potential is spent on the lines you named.`);
@@ -1045,17 +1055,91 @@ export function planCraft(input: SolverInput): PlanResult {
     const message = "Name the affixes you want. Any affix is a line you can leave alone.";
     return emptyResult("impossible", "This craft is not possible.", message, [message], notes);
   }
+  const setOf = (id: string) => {
+    const def = resolveDef(input.catalog, id);
+    return def?.group === "set" ? def : undefined;
+  };
+  const heldSets = input.state.affixes.flatMap((affix) => {
+    const def = setOf(affix.id);
+    return def ? [def] : [];
+  });
+  const wantedSets = input.goal.affixes.flatMap((affix) => {
+    const def = setOf(affix.id);
+    return def ? [def] : [];
+  });
+  const setProblems: string[] = [];
+  if (heldSets.length > 1) setProblems.push("An item can hold one set shard.");
+  if (wantedSets.length > 1) setProblems.push("The target lists more than one set shard. An item can hold one.");
+  if (heldSets[0] && wantedSets[0] && heldSets[0].id !== wantedSets[0].id) {
+    setProblems.push(`${printedName(heldSets[0])} is already on the item. A set shard cannot be replaced with ${printedName(wantedSets[0])}.`);
+  }
+  for (const def of [...heldSets, ...wantedSets]) {
+    if (!allowed(def, input.slot, input.itemClass)) setProblems.push(rollBlocker(def, input.slot, input.itemClass));
+  }
+  if (input.goal.exact && heldSets[0] && !wantedSets.some((def) => def.id === heldSets[0].id)) {
+    setProblems.push(`${printedName(heldSets[0])} is a set shard already on the item, and it cannot be removed.`);
+  }
+  if (setProblems.length) {
+    return emptyResult("impossible", "This craft is not possible.", setProblems[0], [...new Set(setProblems)], notes);
+  }
+  const missingSet = wantedSets.filter((def) => !heldSets.some((held) => held.id === def.id));
+  const attachSet = (result: PlanResult): PlanResult => {
+    const nextNotes = [...result.notes];
+    if (heldSets[0]) {
+      nextNotes.unshift(`${printedName(heldSets[0])} is a set shard from ${heldSets[0].setName}. Havoc, Removal, Chaos, and affix shards leave it where it is.`);
+    }
+    if (!missingSet.length) return { ...result, notes: nextNotes };
+    if (result.blockers.length || result.verdict === "impossible") {
+      nextNotes.unshift(`The target also wants ${printedName(missingSet[0])}, a ${setPlace(missingSet[0])} set shard from ${missingSet[0].setName}.`);
+      return { ...result, notes: nextNotes };
+    }
+    const steps = [...missingSet.map(setShardStep), ...result.steps];
+    const materials = [...missingSet.map((def) => `${printedName(def)} set shard`), ...result.materials];
+    const onlyShard = result.steps.length === 0;
+    return {
+      ...result,
+      steps,
+      materials,
+      notes: nextNotes,
+      headline: onlyShard ? "Yes. Apply the set shard." : result.headline,
+      summary: onlyShard
+        ? `Shatter ${printedName(missingSet[0])} at the Forge of Shattering and apply that shard to a ${setPlace(missingSet[0])}. The other lines are already finished.`
+        : result.summary,
+    };
+  };
+  input = {
+    ...input,
+    state: { fp: input.state.fp, affixes: input.state.affixes.filter((affix) => !setOf(affix.id)) },
+    goal: { ...input.goal, affixes: input.goal.affixes.filter((affix) => !setOf(affix.id)) },
+  };
+  const blockers = diagnose(input.state, input.goal, input.catalog, input.slot, input.itemClass);
+  if (input.goal.affixes.length === 0 && missingSet.length) {
+    if (input.goal.exact && input.state.affixes.length > 0) {
+      const message = "The target is exact, and the other affixes on the item are still there.";
+      return attachSet(emptyResult("impossible", "This craft is not possible.", message, [message], notes));
+    }
+    if (input.state.fp < input.goal.minFp) {
+      const message = `The set shard does not spend Forging Potential, but the target still wants ${input.goal.minFp} left and this item has ${input.state.fp}.`;
+      return attachSet(emptyResult("impossible", "This craft is not possible.", message, [message], notes));
+    }
+    return attachSet({
+      ...emptyResult("guaranteed", "Yes. Apply the set shard.", "Apply the set shard.", [], notes),
+      successChance: 1,
+      guaranteed: true,
+      medianFp: input.state.fp,
+    });
+  }
   if (blockers.length) {
-    return emptyResult("impossible", "This craft is not possible.", blockers[0], blockers, notes);
+    return attachSet(emptyResult("impossible", "This craft is not possible.", blockers[0], blockers, notes));
   }
   if (meetsGoal(input.state, input.goal)) {
-    return {
+    return attachSet({
       ...emptyResult("guaranteed", "The item is already there.", "Nothing in the forge is required.", [], notes),
       successChance: 1,
       guaranteed: true,
       medianFp: input.state.fp,
       guaranteeFp: input.goal.minFp,
-    };
+    });
   }
 
   const iterations = input.iterations ?? 2000;
@@ -1089,13 +1173,13 @@ export function planCraft(input: SolverInput): PlanResult {
   ranked.sort((a, b) => b.chance - a.chance || (b.medianFp ?? -1) - (a.medianFp ?? -1) || a.walk.steps.length - b.walk.steps.length);
   const best = ranked.find((entry) => entry.walk.reached) ?? ranked[0];
   if (!best.walk.reached) {
-    return emptyResult(
+    return attachSet(emptyResult(
       "impossible",
       "This craft is not possible.",
       "No forge sequence turns the starting item into the target, even if Forging Potential never runs out.",
       ["No forge sequence turns the starting item into the target, even if Forging Potential never runs out."],
       notes,
-    );
+    ));
   }
 
   const guaranteeFp = best.guaranteeFp;
@@ -1110,10 +1194,14 @@ export function planCraft(input: SolverInput): PlanResult {
 
   const shown = displayedStrategy(best.style, best.walk.steps);
   const clears = clearComparison(ranked);
+  const highSeal = input.state.affixes.find((affix) => affix.sealed && affix.tier > 4);
+  if (highSeal) {
+    notes.unshift(`${affixName(input.catalog, highSeal.id)} is already sealed at tier ${highSeal.tier}. A drop or a lucky Blood Rage craft can leave a seal that high. Glyph of Despair cannot create it, and Havoc, a slam, and every other forge craft leave that seal where it is.`);
+  }
   if (hasSeal(input.state) && clears.length > 0 && clears.every((option) => option.tool !== "Seal")) {
     notes.unshift("The item already has a sealed affix, so Glyph of Despair cannot free another slot. Chaos and Removal are the remaining ways to open it.");
   }
-  return {
+  return attachSet({
     verdict,
     headline,
     summary: summaryFor({ ...best, style: { ...best.style, name: shown.name } }, guaranteeFp, input.state.fp, guaranteed),
@@ -1134,6 +1222,21 @@ export function planCraft(input: SolverInput): PlanResult {
     clears,
     blockers: [],
     notes,
+  });
+}
+
+function setPlace(def: AffixDef): string {
+  const type = def.itemType ?? "item";
+  if (!def.class) return type;
+  return `${def.class.charAt(0).toUpperCase()}${def.class.slice(1)} ${type}`;
+}
+
+function setShardStep(def: AffixDef): PlanStep {
+  return {
+    title: `Set shard: ${printedName(def)}`,
+    detail: `Shatter ${printedName(def)} at the Forge of Shattering and apply that shard. It only goes on a ${setPlace(def)}, and it keeps the ${def.setName} bonus. The shard does not take a prefix or suffix slot.`,
+    odds: null,
+    action: { type: "add", id: def.id },
   };
 }
 

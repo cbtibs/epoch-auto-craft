@@ -178,10 +178,10 @@ function readAffixes(lines: string[], catalog: AffixDef[], slot: SlotId, itemCla
 }
 
 function headerKind(line: string): "prefix" | "suffix" | "sealed" | "skip" | null {
-  const clean = line.trim().toLowerCase().replace(/[:\-]+/g, " ").replace(/\s+/g, " ").trim();
+  const clean = line.trim().toLowerCase().replace(/[\u2010-\u2015]/g, "-").replace(/[:\-]+/g, " ").replace(/\s+/g, " ").trim();
   if (/^prefixes?$/.test(clean)) return "prefix";
   if (/^suffixes?$/.test(clean)) return "suffix";
-  if (/^sealed affix(?:es)?$/.test(clean)) return "sealed";
+  if (/^sealed affix\b/.test(clean)) return "sealed";
   if (/^(implicit|implicits|unique|set|legendary|exalted|rare|magic|common)$/.test(clean)) return "skip";
   if (/^(requires?\b|item level\b|forging potential\b|ice forging\b|blood forging\b)/.test(clean)) return "skip";
   return null;

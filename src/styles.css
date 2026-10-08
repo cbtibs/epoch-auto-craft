@@ -119,9 +119,10 @@ input, select {
 .any-note { margin: 0; color: var(--muted); font-size: 13px; }
 .any-add { justify-self: start; }
 .affix-list strong { display: block; }
-.prefix, .suffix { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+.prefix, .suffix, .set { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
 .prefix { color: #d5e4f7; }
 .suffix { color: #f0d2bb; }
+.set { color: #e6d48a; }
 .seal { color: var(--seal); font-style: normal; font-size: 12px; margin-left: 8px; }
 
 .tiers { display: flex; gap: 4px; }

@@ -142,6 +142,37 @@ Cannot be Traded
     ]);
   });
 
+  it("reads a dropped tier 6 seal on a staff", () => {
+    const read = parseTooltip(`
+TOXIC CRYSTAL STAFF OF STATIC
+TWO-HANDED STAFF
++72 MELEE DAMAGE
+40 FORGING POTENTIAL
+PREFIXES
+85% INCREASED VOID DAMAGE
+Tier: 3
+189% INCREASED POISON DAMAGE
+Tier: 5 (max craftable)
+SUFFIXES
++64% CHANCE TO CHILL ON HIT
+Tier: 3
++205% CHANCE TO SHOCK ON HIT
+Tier: 7 (drop only)
+SEALED AFFIX – CANNOT BE MODIFIED
++136% CHANCE TO SLOW ON HIT
+Tier: 6 (drop only)
+`, AFFIXES, "helmet", "none");
+    expect(read.slot).toBe("two-hand");
+    expect(read.fp).toBe(40);
+    expect(read.affixes.map((affix) => [affix.id, affix.tier, affix.sealed])).toEqual([
+      ["increased-void-damage", 3, false],
+      ["increased-poison-damage", 5, false],
+      ["chance-to-chill", 3, false],
+      ["chance-to-shock", 7, false],
+      ["chance-to-slow", 6, true],
+    ]);
+  });
+
   it("does not treat the rolled number as the tier", () => {
     expect(tierInLine("+7 Strength")).toBeNull();
     expect(tierInLine("Tier 7")).toBe(7);

@@ -195,6 +195,48 @@ describe("planCraft", () => {
     expect(plan.verdict).toBe("impossible");
   });
 
+  it("keeps a dropped tier 6 seal and refuses to create one", () => {
+    const state: ItemState = {
+      fp: 40,
+      affixes: [
+        { id: "increased-void-damage", tier: 3, sealed: false },
+        { id: "increased-poison-damage", tier: 5, sealed: false },
+        { id: "chance-to-chill", tier: 3, sealed: false },
+        { id: "chance-to-shock", tier: 7, sealed: false },
+        { id: "chance-to-slow", tier: 6, sealed: true },
+      ],
+    };
+    const kept = planCraft({
+      ...base,
+      slot: "two-hand",
+      iterations: 400,
+      state,
+      goal: {
+        exact: false,
+        minFp: 0,
+        affixes: [
+          { id: "chance-to-slow", minTier: 6, sealed: true },
+          { id: "chance-to-shock", minTier: 7, sealed: false },
+          { id: "increased-void-damage", minTier: 5, sealed: false },
+          { id: "any-1", minTier: 1, sealed: false, any: true },
+        ],
+      },
+    });
+    expect(kept.blockers).toEqual([]);
+    expect(kept.verdict).not.toBe("impossible");
+    expect(kept.steps.some((step) => /chance to slow/i.test(step.title))).toBe(false);
+    expect(kept.notes.some((note) => /already sealed at tier 6/i.test(note))).toBe(true);
+
+    const created = planCraft({
+      ...base,
+      slot: "two-hand",
+      state: { fp: 40, affixes: [{ id: "chance-to-slow", tier: 6, sealed: false }] },
+      goal: { affixes: [{ id: "chance-to-slow", minTier: 6, sealed: true }], exact: false, minFp: 0 },
+    });
+    expect(created.verdict).toBe("impossible");
+    expect(created.blockers[0]).toMatch(/only seals tiers 1–4/);
+  });
+
   it("upgrades health regen with Hope when the exalted tier is already on dexterity", () => {
     const plan = planCraft({
       ...base,
@@ -225,5 +267,36 @@ describe("planCraft", () => {
       "Glyph of Hope: upgrade Health Regen per Second to tier 5",
     ]);
     expect(plan.successChance).toBeGreaterThan(0.5);
+  });
+
+  it("applies a set shard without spending a prefix slot or forging potential", () => {
+    const plan = planCraft({
+      ...base,
+      slot: "one-hand",
+      state: { fp: 41, affixes: [{ id: "crit-multi", tier: 1, sealed: false }] },
+      goal: {
+        exact: false,
+        minFp: 0,
+        affixes: [
+          { id: "set-blade-of-the-forgotten-knight", minTier: 1, sealed: false },
+          { id: "crit-multi", minTier: 2, sealed: false },
+        ],
+      },
+    });
+    expect(plan.verdict).not.toBe("impossible");
+    expect(plan.steps[0].title).toMatch(/Set shard: Blade of the Forgotten Knight/);
+    expect(plan.steps[0].detail).toMatch(/One-Handed Sword/);
+    expect(plan.steps.some((step) => step.title.includes("Critical Strike Multiplier"))).toBe(true);
+    expect(plan.materials.some((line) => line.includes("Blade of the Forgotten Knight"))).toBe(true);
+
+    const wrongClass = planCraft({
+      ...base,
+      slot: "helmet",
+      itemClass: "mage",
+      state: { fp: 20, affixes: [] },
+      goal: { affixes: [{ id: "set-doppelgangers-facade", minTier: 1, sealed: false }], exact: false, minFp: 0 },
+    });
+    expect(wrongClass.verdict).toBe("impossible");
+    expect(wrongClass.blockers[0]).toMatch(/Rogue Helmet/);
   });
 });

@@ -25,18 +25,18 @@ export function FollowCraft({
   onApply: (state: ItemState, note: string, extras: AffixDef[]) => void;
 }) {
   const [kind, setKind] = useState<Kind>("recommended");
-  const [upgradeId, setUpgradeId] = useState(step.action.type === "upgrade" ? step.action.id : openBelowFive(affixes)[0]?.id ?? "");
+  const [upgradeId, setUpgradeId] = useState(step.action.type === "upgrade" ? step.action.id : openBelowFive(catalog, affixes)[0]?.id ?? "");
   const [addId, setAddId] = useState(step.action.type === "add" ? step.action.id : "");
   const [addQuery, setAddQuery] = useState("");
-  const [sealId, setSealId] = useState(step.action.type === "seal" ? step.action.id : sealable(affixes)[0]?.id ?? "");
-  const [chaosId, setChaosId] = useState(step.action.type === "chaos" ? step.action.id : openBelowFive(affixes)[0]?.id ?? "");
-  const [becameId, setBecameId] = useState(() => preferredBecame(catalog, slot, itemClass, affixes, step.action.type === "chaos" ? step.action.id : openBelowFive(affixes)[0]?.id ?? "", goalIds));
+  const [sealId, setSealId] = useState(step.action.type === "seal" ? step.action.id : sealable(catalog, affixes)[0]?.id ?? "");
+  const [chaosId, setChaosId] = useState(step.action.type === "chaos" ? step.action.id : openBelowFive(catalog, affixes)[0]?.id ?? "");
+  const [becameId, setBecameId] = useState(() => preferredBecame(catalog, slot, itemClass, affixes, step.action.type === "chaos" ? step.action.id : openBelowFive(catalog, affixes)[0]?.id ?? "", goalIds));
   const [customName, setCustomName] = useState("");
-  const [removedId, setRemovedId] = useState(defaultRemoved(affixes, goalIds));
+  const [removedId, setRemovedId] = useState(defaultRemoved(catalog, affixes, goalIds));
   const [sealFailed, setSealFailed] = useState(false);
   const [critAffixId, setCritAffixId] = useState("");
   const [fpAfter, setFpAfter] = useState(String(fp));
-  const [havocTiers, setHavocTiers] = useState(() => affixes.filter((affix) => !affix.sealed).map((affix) => ({ id: affix.id, tier: affix.tier })));
+  const [havocTiers, setHavocTiers] = useState(() => affixes.filter((affix) => !affix.sealed && catalog.find((def) => def.id === affix.id)?.group !== "set").map((affix) => ({ id: affix.id, tier: affix.tier })));
   const [redemption, setRedemption] = useState<Record<string, string>>({});
 
   const action = buildAction(kind, step, { upgradeId, addId, sealId, chaosId });
@@ -109,7 +109,7 @@ export function FollowCraft({
         <label>
           Affix upgraded
           <select value={upgradeId} onChange={(event) => setUpgradeId(event.target.value)}>
-            {openBelowFive(affixes).map((affix) => (
+            {openBelowFive(catalog, affixes).map((affix) => (
               <option key={affix.id} value={affix.id}>{affixName(catalog, affix.id)} from tier {affix.tier}</option>
             ))}
           </select>
@@ -139,7 +139,7 @@ export function FollowCraft({
             <label>
               Affix you sealed
               <select value={sealId} onChange={(event) => setSealId(event.target.value)}>
-                {sealable(affixes).map((affix) => (
+                {sealable(catalog, affixes).map((affix) => (
                   <option key={affix.id} value={affix.id}>{affixName(catalog, affix.id)} tier {affix.tier}</option>
                 ))}
               </select>
@@ -158,7 +158,7 @@ export function FollowCraft({
             <label>
               Affix you used Chaos on
               <select value={chaosId} onChange={(event) => chooseChaos(event.target.value)}>
-                {openBelowFive(affixes).map((affix) => (
+                {openBelowFive(catalog, affixes).map((affix) => (
                   <option key={affix.id} value={affix.id}>{affixName(catalog, affix.id)} tier {affix.tier}</option>
                 ))}
               </select>
@@ -269,16 +269,16 @@ function buildAction(kind: Kind, step: PlanStep, ids: { upgradeId: string; addId
   return { type: "redemption" };
 }
 
-function openBelowFive(affixes: AffixState[]): AffixState[] {
-  return affixes.filter((affix) => !affix.sealed && affix.tier < 5);
+function openBelowFive(catalog: AffixDef[], affixes: AffixState[]): AffixState[] {
+  return affixes.filter((affix) => !affix.sealed && affix.tier < 5 && catalog.find((def) => def.id === affix.id)?.group !== "set");
 }
 
-function sealable(affixes: AffixState[]): AffixState[] {
-  return affixes.filter((affix) => !affix.sealed && affix.tier <= 4);
+function sealable(catalog: AffixDef[], affixes: AffixState[]): AffixState[] {
+  return affixes.filter((affix) => !affix.sealed && affix.tier <= 4 && catalog.find((def) => def.id === affix.id)?.group !== "set");
 }
 
-function defaultRemoved(affixes: AffixState[], goalIds: string[]): string {
-  const open = affixes.filter((affix) => !affix.sealed);
+function defaultRemoved(catalog: AffixDef[], affixes: AffixState[], goalIds: string[]): string {
+  const open = affixes.filter((affix) => !affix.sealed && catalog.find((def) => def.id === affix.id)?.group !== "set");
   const junk = open.filter((affix) => !goalIds.includes(affix.id));
   const pool = (junk.length ? junk : open).slice().sort((a, b) => a.tier - b.tier);
   return pool[0]?.id ?? "";

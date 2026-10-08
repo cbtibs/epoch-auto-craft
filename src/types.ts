@@ -28,7 +28,7 @@ export const CLASSES = [
 
 export type ItemClass = (typeof CLASSES)[number]["id"];
 export type ClassSpec = Exclude<ItemClass, "none">;
-export type AffixGroup = "prefix" | "suffix";
+export type AffixGroup = "prefix" | "suffix" | "set";
 export type FpType = "standard" | "ice" | "blood";
 
 export type AffixDef = {
@@ -37,6 +37,10 @@ export type AffixDef = {
   group: AffixGroup;
   slots: SlotId[];
   class?: ClassSpec;
+  /** Equipment type a set shard can be applied to, such as One-Handed Sword. */
+  itemType?: string;
+  /** Set bonus this shard keeps, such as Forgotten Knight Set. */
+  setName?: string;
 };
 
 export type AffixState = {

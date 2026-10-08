@@ -1,7 +1,8 @@
 import type { AffixDef, AffixGroup, ItemClass, SlotId } from "./types";
 import { AFFIX_DATA } from "./affix-data";
+import { SET_AFFIXES } from "./set-data";
 
-export const AFFIXES: AffixDef[] = AFFIX_DATA;
+export const AFFIXES: AffixDef[] = [...AFFIX_DATA, ...SET_AFFIXES];
 
 export function printedName(def: AffixDef): string {
   if (!def.class) return def.name;
@@ -27,8 +28,9 @@ export function affixChoices(
       if (taken.has(affix.id)) return false;
       if (!affix.slots.includes(slot)) return false;
       if (affix.class && itemClass !== "none" && affix.class !== itemClass) return false;
-      if (!needle) return !affix.class;
-      return printedName(affix).toLowerCase().includes(needle);
+      if (!needle) return affix.group !== "set" && !affix.class;
+      const haystack = `${printedName(affix)} ${affix.itemType ?? ""} ${affix.setName ?? ""}`.toLowerCase();
+      return haystack.includes(needle);
     })
     .sort((left, right) => {
       const leftName = printedName(left).toLowerCase();

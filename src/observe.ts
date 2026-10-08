@@ -30,7 +30,7 @@ export function otherAffixes(
   const self = catalog.find((affix) => affix.id === id);
   if (!self) return [];
   const present = new Set(affixes.map((affix) => affix.id));
-  return catalog.filter((affix) => affix.group === self.group && affix.id !== id && !present.has(affix.id) && allowed(affix, slot, itemClass));
+  return catalog.filter((affix) => affix.group === self.group && affix.group !== "set" && affix.id !== id && !present.has(affix.id) && allowed(affix, slot, itemClass));
 }
 
 export function critCandidates(state: ItemState): AffixState[] {
@@ -47,7 +47,7 @@ export function resolveCraft(
   const state = clone(origin);
   const main = applyMain(state, input, catalog, slot, itemClass);
   if (!main.ok) return { ok: false, state: null, note: "", reason: main.reason, critOptions: [] };
-  const critOptions = critCandidates(state).map((affix) => ({ ...affix }));
+  const critOptions = critCandidates(state).filter((affix) => catalog.find((def) => def.id === affix.id)?.group !== "set").map((affix) => ({ ...affix }));
   if (!Number.isFinite(input.fpAfter) || input.fpAfter < 0) {
     return { ok: false, state: null, note: "", reason: "Enter the Forging Potential left on the item.", critOptions };
   }
@@ -80,10 +80,10 @@ function applyMain(
   const action = input.action;
   if (action.type === "add") return applyAdd(state, action.id, catalog, slot, itemClass);
   if (action.type === "upgrade") return applyUpgrade(state, action.id, catalog);
-  if (action.type === "seal") return applySeal(state, action.id, input.sealFailed);
+  if (action.type === "seal") return applySeal(state, action.id, input.sealFailed, catalog);
   if (action.type === "chaos") return applyChaos(state, action.id, input.becameId, catalog, slot, itemClass);
   if (action.type === "removal") return applyRemoval(state, input.removedId, catalog);
-  if (action.type === "havoc") return applyHavoc(state, input.havocTiers);
+  if (action.type === "havoc") return applyHavoc(state, input.havocTiers, catalog);
   return applyRedemption(state, input.redemption, catalog, slot, itemClass);
 }
 
@@ -92,11 +92,21 @@ function applyAdd(state: ItemState, id: string, catalog: AffixDef[], slot: SlotI
   if (!def) return { ok: false, reason: "Choose the affix that was added." };
   if (state.affixes.some((affix) => affix.id === id)) return { ok: false, reason: `${printedName(def)} is already on the item.` };
   if (!allowed(def, slot, itemClass)) {
+    if (def.group === "set") {
+      return { ok: false, reason: `${printedName(def)} only goes on a ${def.class ? `${def.class.charAt(0).toUpperCase()}${def.class.slice(1)} ` : ""}${def.itemType ?? "matching item"}.` };
+    }
     if (def.class && def.slots.includes(slot) && itemClass !== def.class) {
       const who = def.class.charAt(0).toUpperCase() + def.class.slice(1);
       return { ok: false, reason: `${printedName(def)} only rolls on ${who} items.` };
     }
     return { ok: false, reason: `${printedName(def)} cannot be added to this item.` };
+  }
+  if (def.group === "set") {
+    if (state.affixes.some((affix) => catalog.find((item) => item.id === affix.id)?.group === "set")) {
+      return { ok: false, reason: "The item already has a set shard." };
+    }
+    state.affixes.push({ id, tier: 1, sealed: false });
+    return { ok: true };
   }
   if (openSlots(state, def.group, catalog) <= 0) {
     return { ok: false, reason: `The ${def.group} side is full. Seal or remove an affix first.` };
@@ -106,6 +116,7 @@ function applyAdd(state: ItemState, id: string, catalog: AffixDef[], slot: SlotI
 }
 
 function applyUpgrade(state: ItemState, id: string, catalog: AffixDef[]): { ok: true } | { ok: false; reason: string } {
+  if (catalog.find((item) => item.id === id)?.group === "set") return { ok: false, reason: "A set shard is applied once. Affix shards do not raise it." };
   const affix = state.affixes.find((item) => item.id === id && !item.sealed);
   if (!affix) return { ok: false, reason: `${affixName(catalog, id)} is not an open affix on this item.` };
   if (affix.tier >= 5) return { ok: false, reason: "Shards cannot raise an affix past tier 5." };
@@ -113,7 +124,8 @@ function applyUpgrade(state: ItemState, id: string, catalog: AffixDef[]): { ok: 
   return { ok: true };
 }
 
-function applySeal(state: ItemState, id: string, failed: boolean): { ok: true } | { ok: false; reason: string } {
+function applySeal(state: ItemState, id: string, failed: boolean, catalog: AffixDef[]): { ok: true } | { ok: false; reason: string } {
+  if (catalog.find((item) => item.id === id)?.group === "set") return { ok: false, reason: "A set shard cannot be sealed." };
   if (state.affixes.some((affix) => affix.sealed)) return { ok: false, reason: "The item already has a sealed affix." };
   const affix = state.affixes.find((item) => item.id === id && !item.sealed);
   if (!affix) return { ok: false, reason: "Choose the affix you tried to seal." };
@@ -131,6 +143,7 @@ function applyChaos(
   slot: SlotId,
   itemClass: ItemClass,
 ): { ok: true } | { ok: false; reason: string } {
+  if (catalog.find((item) => item.id === id)?.group === "set") return { ok: false, reason: "Glyph of Chaos cannot change a set shard." };
   const affix = state.affixes.find((item) => item.id === id && !item.sealed);
   if (!affix) return { ok: false, reason: "Choose the affix you used Glyph of Chaos on." };
   if (affix.tier >= 5) return { ok: false, reason: "Glyph of Chaos cannot be used on a tier 5 affix." };
@@ -144,14 +157,15 @@ function applyChaos(
 
 function applyRemoval(state: ItemState, removedId: string | null, catalog: AffixDef[]): { ok: true } | { ok: false; reason: string } {
   if (!removedId) return { ok: false, reason: "Pick the affix Removal took off." };
+  if (catalog.find((item) => item.id === removedId)?.group === "set") return { ok: false, reason: "A set shard cannot be removed." };
   const target = state.affixes.find((affix) => affix.id === removedId && !affix.sealed);
   if (!target) return { ok: false, reason: `${affixName(catalog, removedId)} is not an open affix.` };
   state.affixes = state.affixes.filter((affix) => affix !== target);
   return { ok: true };
 }
 
-function applyHavoc(state: ItemState, tiers: { id: string; tier: number }[] | null): { ok: true } | { ok: false; reason: string } {
-  const open = state.affixes.filter((affix) => !affix.sealed);
+function applyHavoc(state: ItemState, tiers: { id: string; tier: number }[] | null, catalog: AffixDef[]): { ok: true } | { ok: false; reason: string } {
+  const open = state.affixes.filter((affix) => !affix.sealed && catalog.find((def) => def.id === affix.id)?.group !== "set");
   if (open.length !== 4 || !open.some((affix) => affix.tier >= 6)) {
     return { ok: false, reason: "Havoc needs four open affixes and an exalted tier." };
   }

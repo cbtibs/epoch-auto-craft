@@ -41,7 +41,7 @@ A filler step says to add any prefix or any suffix that item can roll. It does n
 | Rune of Havoc | Shuffles the tiers on the four unsealed affixes. Costs up to 20. |
 | Rune of Redemption | Rerolls every exalted affix. Costs up to 20. |
 
-Seal chances use the Tunklab formula. More unsealed affixes raise the seal chance a little. An exalted item seals more readily than a normal one. Tier 5 cannot be sealed.
+Seal chances use the Tunklab formula. More unsealed affixes raise the seal chance a little. An exalted item seals more readily than a normal one. Glyph of Despair cannot seal tier 5 or higher. A seal above tier 4 can already be on the item from a drop or a lucky Blood Rage craft, and Havoc cannot move it.
 
 Chaos and Redemption odds count the affixes in this app, plus 25 extra unlisted outcomes. That extra number is a dial in Forge assumptions, so Chaos is the loosest odds in the plan. A bigger affix list makes Chaos less likely to hit the line you want.
 

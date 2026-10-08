@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AFFIXES, affixChoices, printedName } from "./affixes";
+import { SET_AFFIXES } from "./set-data";
 import { parseTooltip } from "./tooltip";
 import type { SlotId } from "./types";
 
@@ -60,5 +61,19 @@ Requires: Level 1 ${affix.class}
         expect(read.affixes.map((row) => row.id)).toContain(affix.id);
       }
     }
+  });
+
+  it("lists a shattered set shard on its item type and class", () => {
+    expect(SET_AFFIXES.length).toBe(59);
+    const blade = affixChoices(AFFIXES, "one-hand", "none", "forgotten knight", new Set());
+    expect(blade.map((affix) => affix.id)).toEqual(["set-blade-of-the-forgotten-knight"]);
+    expect(blade[0].itemType).toBe("One-Handed Sword");
+    expect(affixChoices(AFFIXES, "bow", "none", "forgotten knight", new Set())).toEqual([]);
+    const facade = affixChoices(AFFIXES, "helmet", "rogue", "doppelganger", new Set());
+    expect(facade.map((affix) => affix.id)).toEqual(["set-doppelgangers-facade"]);
+    expect(facade[0].class).toBe("rogue");
+    expect(affixChoices(AFFIXES, "helmet", "mage", "doppelganger", new Set())).toEqual([]);
+    expect(affixChoices(AFFIXES, "helmet", "sentinel", "sunforged", new Set()).map((affix) => affix.id)).toContain("set-sunforged-greathelm");
+    expect(affixChoices(AFFIXES, "two-hand", "mage", "sunforged hammer", new Set()).map((affix) => affix.id)).toEqual(["set-sunforged-hammer"]);
   });
 });

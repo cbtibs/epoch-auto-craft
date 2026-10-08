@@ -81,7 +81,7 @@ export function TooltipReview({
                 >
                   <option value="">Choose an affix</option>
                   {choices.map((choice) => (
-                    <option key={choice.id} value={choice.id}>{choice.group === "suffix" ? "Suffix" : "Prefix"} · {printedName(choice)}{choice.class ? ` · ${choice.class}` : ""}</option>
+                    <option key={choice.id} value={choice.id}>{choice.group === "set" ? "Set" : choice.group === "suffix" ? "Suffix" : "Prefix"} · {printedName(choice)}{choice.itemType ? ` · ${choice.itemType}` : ""}{choice.class ? ` · ${choice.class}` : ""}</option>
                   ))}
                   <option value="__custom__">Custom affix</option>
                 </select>

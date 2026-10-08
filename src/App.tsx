@@ -411,7 +411,7 @@ export function App() {
             setTarget(current.map((affix) => ({
               id: affix.id,
               minTier: affix.tier,
-              sealed: affix.sealed && affix.tier <= 4,
+              sealed: affix.sealed,
             })));
             setResult(null);
           }}
@@ -644,7 +644,7 @@ function ItemBoard(props: BoardProps) {
     const def = props.catalog.find((affix) => affix.id === id);
     if (def?.class && props.itemClass === "none") props.onUseClass(def.class);
     if (props.mode === "current") props.onChange([...props.affixes, { id, tier: 1, sealed: false }]);
-    else props.onChange([...props.affixes, { id, minTier: 5, sealed: false }]);
+    else props.onChange([...props.affixes, { id, minTier: def?.group === "set" ? 1 : 5, sealed: false }]);
     setQuery("");
   }
 
@@ -757,14 +757,19 @@ function ItemBoard(props: BoardProps) {
       <ul className="affix-list">
         {props.affixes.length === 0 && <li className="empty">No affixes yet.</li>}
         {props.mode === "current"
-          ? props.affixes.map((affix) => (
+          ? props.affixes.map((affix) => {
+              const def = props.catalog.find((item) => item.id === affix.id);
+              const setShard = def?.group === "set";
+              return (
               <li key={affix.id}>
                 <div>
                   <span className={groupClass(props.catalog, affix.id)}>{groupLabel(props.catalog, affix.id)}</span>
-                  <strong className={`t${affix.tier}`}>{affixName(props.catalog, affix.id)}</strong>
+                  <strong className={setShard ? "" : `t${affix.tier}`}>{affixName(props.catalog, affix.id)}</strong>
+                  {setShard && <em className="seal">{def?.itemType}</em>}
                   {affix.sealed && <em className="seal">Sealed</em>}
                 </div>
-                <TierPicker value={affix.tier} onChange={(tier) => props.onChange(props.affixes.map((item) => item.id === affix.id ? { ...item, tier } : item))} />
+                {!setShard && <TierPicker value={affix.tier} onChange={(tier) => props.onChange(props.affixes.map((item) => item.id === affix.id ? { ...item, tier } : item))} />}
+                {!setShard && (
                 <label className="check slim">
                   <input
                     type="checkbox"
@@ -773,9 +778,11 @@ function ItemBoard(props: BoardProps) {
                   />
                   Sealed
                 </label>
+                )}
                 <button type="button" className="ghost" onClick={() => props.onChange(props.affixes.filter((item) => item.id !== affix.id))}>Remove</button>
               </li>
-            ))
+              );
+            })
           : props.affixes.map((affix) => affix.any ? (
               <li key={affix.id} className="any-affix">
                 <div>
@@ -789,13 +796,17 @@ function ItemBoard(props: BoardProps) {
               <li key={affix.id}>
                 <div>
                   <span className={groupClass(props.catalog, affix.id)}>{groupLabel(props.catalog, affix.id)}</span>
-                  <strong className={`t${affix.minTier}`}>{affixName(props.catalog, affix.id)}</strong>
+                  <strong className={props.catalog.find((item) => item.id === affix.id)?.group === "set" ? "" : `t${affix.minTier}`}>{affixName(props.catalog, affix.id)}</strong>
+                  {props.catalog.find((item) => item.id === affix.id)?.group === "set" && <em className="seal">{props.catalog.find((item) => item.id === affix.id)?.itemType}</em>}
                   {affix.sealed && <em className="seal">Must be sealed</em>}
                 </div>
+                {props.catalog.find((item) => item.id === affix.id)?.group !== "set" && (
                 <TierPicker
                   value={affix.minTier}
                   onChange={(tier) => props.onChange(props.affixes.map((item) => item.id === affix.id ? { ...item, minTier: tier } : item))}
                 />
+                )}
+                {props.catalog.find((item) => item.id === affix.id)?.group !== "set" && (
                 <label className="check slim">
                   <input
                     type="checkbox"
@@ -804,6 +815,7 @@ function ItemBoard(props: BoardProps) {
                   />
                   Seal it
                 </label>
+                )}
                 <button type="button" className="ghost" onClick={() => props.onChange(props.affixes.filter((item) => item.id !== affix.id))}>Remove</button>
               </li>
             ))}
@@ -815,7 +827,7 @@ function ItemBoard(props: BoardProps) {
             {choices.length === 0 && <p>No matching affix. Add it as a custom one below.</p>}
             {choices.map((affix) => (
               <button key={affix.id} type="button" onClick={() => add(affix.id)}>
-                <span>{affix.class ? `${affix.group} · ${affix.class}` : affix.group}</span>
+                <span>{affix.group === "set" ? `set${affix.class ? ` · ${affix.class}` : ""} · ${affix.itemType}` : affix.class ? `${affix.group} · ${affix.class}` : affix.group}</span>
                 {printedName(affix)}
               </button>
             ))}
@@ -852,9 +864,13 @@ function TierPicker({ value, onChange }: { value: number; onChange: (tier: numbe
 }
 
 function groupLabel(catalog: AffixDef[], id: string): string {
-  return catalog.find((affix) => affix.id === id)?.group === "suffix" ? "Suffix" : "Prefix";
+  const group = catalog.find((affix) => affix.id === id)?.group;
+  if (group === "set") return "Set";
+  return group === "suffix" ? "Suffix" : "Prefix";
 }
 
 function groupClass(catalog: AffixDef[], id: string): string {
-  return catalog.find((affix) => affix.id === id)?.group === "suffix" ? "suffix" : "prefix";
+  const group = catalog.find((affix) => affix.id === id)?.group;
+  if (group === "set") return "set";
+  return group === "suffix" ? "suffix" : "prefix";
 }
